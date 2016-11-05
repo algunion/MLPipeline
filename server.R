@@ -58,11 +58,12 @@ shinyServer(function(input, output) {
   output$classVarUI <- renderUI({
     
     if (! is.null(input$file)) {
-      serverData$Imported <- data.frame(read_csv(input$file$datapath))
+      isolate(serverData$Imported <- data.frame(read_csv(input$file$datapath)))
+      isolate(serverData$Imported <- serverData$Imported[colSums(!is.na(serverData$Imported)) > 0])
       serverData$Ready <- TRUE
     }
     
-    selectInput("labels", "Classes variable", colnames(serverData$Imported))
+    selectInput("labels", "Classes variable", colnames(serverData$Imported), selected = tail(x = colnames(serverData$Imported), n = 1), selectize = FALSE)
   })
   
   output$classVarSummaryUI <- renderUI({
