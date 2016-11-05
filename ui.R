@@ -16,7 +16,8 @@ models <- c("xgbTree", "rf", "C5.0", "Boruta")
 sidebar <- dashboardSidebar(
   sidebarMenu(
     menuItem("Import Data", tabName = "import", icon = icon("plus", lib = "glyphicon")),
-    menuItem("Settings", tabName = "mlsettings", icon = icon("cog", lib = "glyphicon"))
+    menuItem("Settings", tabName = "mlsettings", icon = icon("cog", lib = "glyphicon")),
+    menuItem("Results", tabName = "mlresults", icon = icon("knight", lib = "glyphicon"))
   )
 )
 
@@ -30,15 +31,19 @@ body <- dashboardBody(
             
             fluidRow(
               box(title = "Labels summary", solidHeader = TRUE, uiOutput("classVarSummaryUI")),
-              box(title = "Data splitting", solidHeader = TRUE, status = "primary", sliderInput("trainSplit", "Select Train Percent", 0, 100, value = 70, step = 1)))
+              box(title = "Data splitting", solidHeader = TRUE, status = "primary", 
+                  sliderInput("trainSplit", "Select Train Percent", 0, 100, value = 70, step = 1),
+                  uiOutput("splittingTableUI")
+              ))
             
     ),
     
     tabItem(tabName = "mlsettings",
             fluidRow(
               box(title = "Add model configuration", status = "warning", solidHeader = TRUE, collapsible = TRUE,
-                  column(width = 6,  actionButton("addModel", "Add model", icon = icon("pushpin", lib = "glyphicon"))),
-                  column(width = 6,  actionButton("runModels", "Run Models", icon = icon("play", lib = "glyphicon")))),
+                  column(width = 4,  actionButton("addModel", "Add", icon = icon("pushpin", lib = "glyphicon"))),
+                  column(width = 4,  actionButton("clearModels", "Clear", icon = icon("trash", lib = "glyphicon"))),
+                  column(width = 4,  actionButton("runModels", "Run",icon = icon("play", lib = "glyphicon")))),
               box(title = "Selected Models", status = "danger", solidHeader = TRUE, collapsible = TRUE,
                   verbatimTextOutput("selectedModels")
               )
@@ -55,6 +60,11 @@ body <- dashboardBody(
                   uiOutput("trainControlPLGOCVUI"),
                   uiOutput("trainControlMethodDescriptionUI"))
             )
+    ),
+    
+    tabItem(tabName = "mlresults",
+            box(title = "Test the result output",
+                verbatimTextOutput("results"))
     )
   )
 )

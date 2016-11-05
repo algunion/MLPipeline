@@ -23,7 +23,27 @@ xgb_grid_default = expand.grid(
 
 rf_grid_default <- expand.grid(mtry = seq(4,16,4), ntree = c(700, 1000,2000) )
 
-
+trainFunction <- function(input, serverData) {
+  localLabels <- factor(serverData$Imported[,input$labels])
+  trainIndexes <- createDataPartition(y = localLabels, p = input$trainSplit / 100, list = FALSE)
+  
+  
+  trainLabels <- localLabels[trainIndexes]
+  testLabels <- localLabels[-trainIndexes]
+  
+  trainData <- serverData$Imported[trainIndexes,]
+  testData <- serverData$Imported[trainIndexes,]
+  
+  trainData[, input$labels] <- NULL
+  testData[, input$labels] <- NULL
+  
+  for (model in serverData$SelectedModels) {
+    print(model)
+    fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl, tuneGrid = serverData[[model]]$tuneGrid)
+    print(model)
+    isolate(serverData[[model]]$fittedModel <- fittedModel)
+  }
+}
 
 
 shinyServer(function(input, output) {
@@ -31,10 +51,14 @@ shinyServer(function(input, output) {
   serverData <- reactiveValues()
   serverData$Ready <- FALSE
   
+  serverAddModel <- 0
+  serverClearModels <- 0
+  serverRunModels <- 0
+  
   output$classVarUI <- renderUI({
     
     if (! is.null(input$file)) {
-      serverData$Imported <- read_csv(input$file$datapath)
+      serverData$Imported <- data.frame(read_csv(input$file$datapath))
       serverData$Ready <- TRUE
     }
     
@@ -49,7 +73,25 @@ shinyServer(function(input, output) {
   
   output$classVarSummary <- renderPrint({
     if (serverData$Ready) {
-      (summary((serverData$Imported[,input$labels])))
+      (summary(factor(serverData$Imported[,input$labels])))
+    }
+  })
+  
+  output$splittingTableUI <- renderUI({
+    if (serverData$Ready) {
+      verbatimTextOutput("dataSplittingCases")
+    }
+  })
+  
+  output$dataSplittingCases <- renderPrint({
+    if (serverData$Ready) {
+      localLabels <- factor(serverData$Imported[,input$labels])
+      trainIndexes <- createDataPartition(y = localLabels, p = input$trainSplit / 100, list = FALSE)
+      trainLabels <- localLabels[trainIndexes]
+      testLabels <- localLabels[-trainIndexes]
+      
+      print(table(trainLabels))
+      print(table(testLabels))
     }
   })
   
@@ -127,9 +169,18 @@ shinyServer(function(input, output) {
     }
   })
   
+  
   output$selectedModels <- renderPrint({
-    if (input$addModel > 0) {
-      x <- input$addModel
+    
+    if (input$clearModels > serverClearModels) {
+      serverClearModels <<- input$clearModels
+      isolate({
+        serverData$SelectedModels <- c()
+      })
+    }
+    
+    if (input$addModel > serverAddModel) {
+      serverAddModel <<- input$addModel
       isolate( {
         if (!input$model %in% serverData$SelectedModels) {
           serverData$SelectedModels <- c(serverData$SelectedModels, input$model)
@@ -152,15 +203,16 @@ shinyServer(function(input, output) {
           
         }
         
-        
-        
         if (input$model == "xgbTree") {
           if (input$useTuneGrid) {
             serverData$xgbTree$tuneGrid <- expand.grid(
               nrounds = input$tuneGridXGBoostNRounds,
               eta = seq(input$tuneGridXGBoostEta[1], input$tuneGridXGBoostEta[2], (input$tuneGridXGBoostEta[2] - input$tuneGridXGBoostEta[1]) / 4),
               max_depth = seq(input$tuneGridXGBoostMaxDepth[1], input$tuneGridXGBoostMaxDepth[2], input$tuneGridXGBoostMaxDepthStep),
-              gamma = seq(input$tuneGridXGBoostGamma[1], input$tuneGridXGBoostGamma[2], input$tuneGridXGBoostGammaStep)
+              gamma = seq(input$tuneGridXGBoostGamma[1], input$tuneGridXGBoostGamma[2], input$tuneGridXGBoostGammaStep),
+              colsample_bytree = 1,
+              min_child_weight = 1,
+              subsample = 1
             )
             
             serverData$xgbTree$useTuneGrid <- TRUE
@@ -178,7 +230,10 @@ shinyServer(function(input, output) {
           if (input$useTuneGrid) {
             serverData[[input$model]]$tuneGrid <- expand.grid(
               trials = seq(input$tuneGridC50Trials[1], input$tuneGridC50Trials[2], input$tuneGridC50TrialsStep),
-              split = seq(input$tuneGridC50Splits[1], input$tuneGridC50Splits[2], input$tuneGridC50SplitsStep)
+              #split = seq(input$tuneGridC50Splits[1], input$tuneGridC50Splits[2], input$tuneGridC50SplitsStep),
+              model = "tree",
+              winnow = FALSE,
+              columns = 1
             )
             
             serverData[[input$model]]$useTuneGrid <- TRUE
@@ -193,9 +248,70 @@ shinyServer(function(input, output) {
             serverData[[input$model]]$useTuneGrid <- TRUE
           }
         }
-      }
-              )
-      str(serverData$SelectedModels)
+      })
+      
+    }
+    
+    str(serverData$SelectedModels)
+  })
+  
+  output$results <- renderPrint({
+    if (input$runModels > serverRunModels) {
+      
+      
+      localLabels <- factor(serverData$Imported[,input$labels])
+      trainIndexes <- createDataPartition(y = localLabels, p = input$trainSplit / 100, list = FALSE)
+      
+      
+      trainLabels <- localLabels[trainIndexes]
+      testLabels <- localLabels[-trainIndexes]
+      
+      trainData <- serverData$Imported[trainIndexes,]
+      testData <- serverData$Imported[trainIndexes,]
+      
+      trainData[, input$labels] <- NULL
+      testData[, input$labels] <- NULL
+      
+      trainData <- sapply(X = trainData, FUN = as.numeric)
+      
+      print(dim(trainData))
+      print(dim(testData))
+      
+      fittedModel <- NULL
+      
+      for (model in serverData$SelectedModels) {
+        
+        if (input$useTuneGrid && input$trainControlMethod != "none") {
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl, tuneGrid = serverData[[model]]$tuneGrid)
+        } else if (input$useTuneGrid) {
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, tuneGrid = serverData[[model]]$tuneGrid)
+        } else if (input$trainControlMethod != "none") {
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl)
+        } else {
+          fittedModel <- train(x = trainData, y = trainLabels, method = model)
+        }
+        
+        print(summary(fittedModel))
+        print(fittedModel)
+        
+            #print(model)
+            #serverData[[model]]$fittedModel <- fittedModel
+          }
+      
+      # isolate({
+      #   
+      # 
+      #   for (model in serverData$SelectedModels) {
+      #     print(model)
+      #     fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl, tuneGrid = serverData[[model]]$tuneGrid)
+      #     print(model)
+      #     serverData[[model]]$fittedModel <- fittedModel
+      #   }
+      # })
+      
+      
+      
+      #print(summary(serverData[["xgbTree"]]$fittedModel))
     }
   })
   
