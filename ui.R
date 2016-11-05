@@ -36,7 +36,18 @@ body <- dashboardBody(
     
     tabItem(tabName = "mlsettings",
             fluidRow(
-              box(title = "Model Selection", status = "primary", solidHeader = TRUE, selectInput("model", "Model", models)),
+              box(title = "Add model configuration", status = "warning", solidHeader = TRUE, collapsible = TRUE,
+                  column(width = 6,  actionButton("addModel", "Add model", icon = icon("pushpin", lib = "glyphicon"))),
+                  column(width = 6,  actionButton("runModels", "Run Models", icon = icon("play", lib = "glyphicon")))),
+              box(title = "Selected Models", status = "danger", solidHeader = TRUE, collapsible = TRUE,
+                  verbatimTextOutput("selectedModels")
+              )
+              ),
+            fluidRow(
+              box(title = "Model Selection", status = "primary", solidHeader = TRUE, 
+                  selectInput("model", "Model", models),
+                  checkboxInput("useTuneGrid", label = "Use hyperparameter optimization", value = FALSE),
+                  uiOutput("tuneGridUI")),
               box(title = "Train Control", status = "danger", solidHeader = TRUE, 
                   uiOutput("trainControlMethodUI"),
                   uiOutput("trainControlNumberUI"),
