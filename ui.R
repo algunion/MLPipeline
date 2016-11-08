@@ -63,8 +63,7 @@ body <- dashboardBody(
     ),
     
     tabItem(tabName = "mlresults",
-            box(title = "Test the result output",
-                verbatimTextOutput("results"))
+            fluidRow(verbatimTextOutput("results"))
     )
   )
 )

@@ -283,13 +283,13 @@ shinyServer(function(input, output) {
       for (model in serverData$SelectedModels) {
         
         if (input$useTuneGrid && input$trainControlMethod != "none") {
-          fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl, tuneGrid = serverData[[model]]$tuneGrid)
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, preProcess = c("scale", "center"), trControl = serverData[[model]]$trainControl, tuneGrid = serverData[[model]]$tuneGrid)
         } else if (input$useTuneGrid) {
-          fittedModel <- train(x = trainData, y = trainLabels, method = model, tuneGrid = serverData[[model]]$tuneGrid)
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, tuneGrid = serverData[[model]]$tuneGrid, preProcess = c("scale", "center"))
         } else if (input$trainControlMethod != "none") {
-          fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl)
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, trControl = serverData[[model]]$trainControl, preProcess = c("center"))
         } else {
-          fittedModel <- train(x = trainData, y = trainLabels, method = model)
+          fittedModel <- train(x = trainData, y = trainLabels, method = model, preProcess = c("scale", "center"))
         }
         
         print(summary(fittedModel))
